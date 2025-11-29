@@ -67,49 +67,37 @@ export class DatasetController {
             return await this.openDataset(tokenId);
           }
 
-          // Step 2: Verify rental status
-          progress.report({ message: 'Verifying rental status on blockchain...' });
+          // Step 2: Verify rental status and get decryption key
+          progress.report({ message: 'Verifying blockchain access and retrieving key...' });
           const verifyResponse = await this.apiClient.verifyRentalStatus(
             tokenId,
             this.currentSession!.walletAddress
           );
 
-          if (!verifyResponse.success || !verifyResponse.is_valid) {
+          if (!verifyResponse.success || !verifyResponse.is_valid || !verifyResponse.decryption_key) {
             vscode.window.showErrorMessage(
               `Access denied: ${verifyResponse.error || 'Rental not active or expired'}`
             );
             return false;
           }
 
-          // Step 3: Request decryption key
-          progress.report({ message: 'Requesting decryption key...' });
-          const decryptResponse = await this.apiClient.requestDecryptionKey(
-            tokenId,
-            this.currentSession!.walletAddress,
-            cid
-          );
+          // Get the IPFS CID from the response (or use the provided one)
+          const actualCid = verifyResponse.ipfs_cid || cid;
 
-          if (!decryptResponse.success || !decryptResponse.decryption_key) {
-            vscode.window.showErrorMessage(
-              `Failed to obtain decryption key: ${decryptResponse.error || 'Unknown error'}`
-            );
-            return false;
-          }
-
-          // Step 4: Download encrypted file
+          // Step 3: Download encrypted file from IPFS
           progress.report({ message: 'Downloading encrypted dataset from IPFS...' });
-          const encryptedData = await this.apiClient.downloadEncryptedFile(cid);
+          const encryptedData = await this.apiClient.downloadEncryptedFile(actualCid);
 
           if (!encryptedData) {
             vscode.window.showErrorMessage('Failed to download encrypted dataset');
             return false;
           }
 
-          // Step 5: Decrypt
+          // Step 4: Decrypt
           progress.report({ message: 'Decrypting dataset...' });
           const decryptedData = await this.decryptionService.decrypt(
             encryptedData,
-            decryptResponse.decryption_key
+            verifyResponse.decryption_key
           );
 
           if (!decryptedData) {
@@ -117,22 +105,22 @@ export class DatasetController {
             return false;
           }
 
-          // Step 6: Store in memory
+          // Step 5: Store in memory
           progress.report({ message: 'Storing in memory...' });
-          const datasetFilename = filename || this.generateFilename(tokenId, cid);
+          const datasetFilename = filename || this.generateFilename(tokenId, actualCid);
 
           const dataset: DecryptedDataset = {
             tokenId,
             content: decryptedData,
             filename: datasetFilename,
             decryptedAt: Date.now(),
-            expiryTimestamp: decryptResponse.rental_status?.expiry_timestamp || Date.now() + 7 * 24 * 60 * 60 * 1000,
+            expiryTimestamp: verifyResponse.rental_status?.expiryTimestamp || Date.now() + 7 * 24 * 60 * 60 * 1000,
           };
 
           this.datasetManager.storeDataset(dataset);
           this.fsProvider.notifyFileCreated(tokenId, datasetFilename);
 
-          // Step 7: Open in editor
+          // Step 6: Open in editor
           progress.report({ message: 'Opening dataset...' });
           await this.openDataset(tokenId);
 

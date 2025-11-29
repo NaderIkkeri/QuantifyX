@@ -15,14 +15,15 @@ export class DecryptionService {
 
   /**
    * Decrypt encrypted dataset using Fernet-compatible decryption
-   * This matches the Django backend's encryption scheme
+   * This matches the Django backend's encryption scheme (cryptography.fernet.Fernet)
    */
   async decryptDataset(
     encryptedData: Uint8Array,
     decryptionKey: string
   ): Promise<Uint8Array | null> {
     try {
-      this.log('Starting decryption process');
+      this.log(`Starting Fernet decryption (encrypted data size: ${encryptedData.length} bytes)`);
+      this.log(`Decryption key length: ${decryptionKey.length} chars`);
 
       // Decode the Fernet token
       const tokenBuffer = Buffer.from(encryptedData);
