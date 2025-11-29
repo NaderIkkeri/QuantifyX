@@ -18,7 +18,9 @@ export class DjangoApiClient {
   }
 
   /**
-   * Verify rental status for a specific dataset
+   * Verify rental status and get decryption key in one call
+   * Uses the Django SecureAccessView endpoint which verifies blockchain ownership/rental
+   * and returns the encryption key if access is granted
    */
   async verifyRentalStatus(
     tokenId: string,
@@ -27,16 +29,16 @@ export class DjangoApiClient {
     try {
       this.log(`Verifying rental status for token ${tokenId}, wallet ${walletAddress}`);
 
-      const response = await fetch(`${this.baseUrl}/api/verify-rental/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          token_id: tokenId,
-          wallet_address: walletAddress,
-        }),
-      });
+      // Use the SecureAccessView endpoint with dataset_id and wallet_address
+      const response = await fetch(
+        `${this.baseUrl}/api/datasets/access/${tokenId}/?wallet_address=${encodeURIComponent(walletAddress)}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -45,16 +47,21 @@ export class DjangoApiClient {
       const data = await response.json();
       this.log(`Verification response: ${JSON.stringify(data)}`);
 
+      // If successful, we have access and a decryption key
+      if (data.success && data.key) {
+        return {
+          success: true,
+          is_valid: true,
+          ipfs_cid: data.ipfs_cid,
+          decryption_key: data.key,
+          error: undefined,
+        };
+      }
+
       return {
-        success: data.success,
-        is_valid: data.is_valid || false,
-        rental_status: data.rental_status ? {
-          isActive: data.rental_status.is_active,
-          expiryTimestamp: data.rental_status.expiry_timestamp,
-          renter: data.rental_status.renter,
-          tokenId: tokenId,
-        } : undefined,
-        error: data.error,
+        success: false,
+        is_valid: false,
+        error: data.error || 'Access denied',
       };
     } catch (error) {
       this.logError('Rental verification failed', error);
@@ -66,71 +73,16 @@ export class DjangoApiClient {
     }
   }
 
-  /**
-   * Request decryption key from Django backend
-   * Django will verify blockchain status before returning the key
-   */
-  async requestDecryptionKey(
-    tokenId: string,
-    walletAddress: string,
-    cid: string
-  ): Promise<DjangoDecryptResponse> {
-    try {
-      this.log(`Requesting decryption key for token ${tokenId}`);
-
-      const response = await fetch(`${this.baseUrl}/api/decrypt-dataset/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          token_id: tokenId,
-          wallet_address: walletAddress,
-          cid: cid,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-
-      if (!data.success) {
-        this.logError('Decryption key request failed', new Error(data.error || 'Unknown error'));
-        return {
-          success: false,
-          error: data.error || 'Failed to obtain decryption key',
-        };
-      }
-
-      this.log('Decryption key obtained successfully');
-      return {
-        success: true,
-        decryption_key: data.decryption_key,
-        rental_status: data.rental_status ? {
-          is_active: data.rental_status.is_active,
-          expiry_timestamp: data.rental_status.expiry_timestamp,
-          renter: data.rental_status.renter,
-        } : undefined,
-      };
-    } catch (error) {
-      this.logError('Decryption key request failed', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
-    }
-  }
 
   /**
    * Download encrypted file from IPFS via Django backend
+   * The backend fetches from Pinata IPFS gateway and returns the encrypted bytes
    */
   async downloadEncryptedFile(cid: string): Promise<Uint8Array | null> {
     try {
       this.log(`Downloading encrypted file from IPFS: ${cid}`);
 
-      const response = await fetch(`${this.baseUrl}/api/download-encrypted/${cid}/`, {
+      const response = await fetch(`${this.baseUrl}/api/datasets/download-encrypted/${cid}/`, {
         method: 'GET',
       });
 

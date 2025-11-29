@@ -42,6 +42,8 @@ export interface DjangoVerifyResponse {
   success: boolean;
   is_valid: boolean;
   rental_status?: RentalStatus;
+  decryption_key?: string;
+  ipfs_cid?: string;
   error?: string;
 }
 
