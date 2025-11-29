@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    // ... your existing options ...
+    "rootDir": "src",
+    "outDir": "out"
+  },
+  "include": [
+    "src/**/*" 
+  ],
+  "exclude": [
+    "node_modules",
+    ".vscode-test",
+    "webview-ui"  // 👈 Add this line!
+  ]
+}

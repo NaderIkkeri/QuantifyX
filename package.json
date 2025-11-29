@@ -1,0 +1,156 @@
+{
+  "name": "quantifyx",
+  "displayName": "QuantifyX",
+  "description": "Secure Data Analysis & Decryption Platform with DRM Protection",
+  "version": "0.0.1",
+  "publisher": "quantifyx",
+  "engines": {
+    "vscode": "^1.106.1"
+  },
+  "categories": [
+    "Data Science",
+    "Other"
+  ],
+  "keywords": [
+    "blockchain",
+    "datasets",
+    "drm",
+    "data-marketplace",
+    "encryption",
+    "ipfs"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "quantifyx-sidebar-view",
+          "title": "QuantifyX",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "quantifyx-sidebar-view": [
+        {
+          "type": "webview",
+          "id": "quantifyx-sidebar",
+          "name": "Datasets"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "quantifyx.connectWallet",
+        "title": "Connect Wallet",
+        "category": "QuantifyX"
+      },
+      {
+        "command": "quantifyx.unlockDataset",
+        "title": "Unlock Dataset",
+        "category": "QuantifyX",
+        "icon": "$(unlock)"
+      },
+      {
+        "command": "quantifyx.openDataset",
+        "title": "Open Dataset",
+        "category": "QuantifyX",
+        "icon": "$(file)"
+      },
+      {
+        "command": "quantifyx.lockDataset",
+        "title": "Lock Dataset",
+        "category": "QuantifyX",
+        "icon": "$(lock)"
+      },
+      {
+        "command": "quantifyx.clearAllDatasets",
+        "title": "Clear All Datasets from Memory",
+        "category": "QuantifyX",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "quantifyx.showMemoryStats",
+        "title": "Show Memory Statistics",
+        "category": "QuantifyX",
+        "icon": "$(dashboard)"
+      },
+      {
+        "command": "quantifyx.configureDjangoUrl",
+        "title": "Configure Django Backend URL",
+        "category": "QuantifyX",
+        "icon": "$(settings-gear)"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "quantifyx.connectWallet"
+        },
+        {
+          "command": "quantifyx.unlockDataset"
+        },
+        {
+          "command": "quantifyx.openDataset"
+        },
+        {
+          "command": "quantifyx.lockDataset"
+        },
+        {
+          "command": "quantifyx.clearAllDatasets"
+        },
+        {
+          "command": "quantifyx.showMemoryStats"
+        },
+        {
+          "command": "quantifyx.configureDjangoUrl"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "QuantifyX",
+      "properties": {
+        "quantifyx.djangoBackendUrl": {
+          "type": "string",
+          "default": "http://localhost:8000",
+          "description": "Django backend URL for DRM verification and decryption"
+        },
+        "quantifyx.autoConnectWallet": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically connect wallet on extension activation"
+        },
+        "quantifyx.memoryLimitMB": {
+          "type": "number",
+          "default": 1024,
+          "description": "Maximum memory usage for datasets in MB (default: 1GB)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile && cd webview-ui && npm run build",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src",
+    "test": "vscode-test",
+    "build:webview": "cd webview-ui && npm run build",
+    "dev:webview": "cd webview-ui && npm run dev"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "20.x",
+    "@types/vscode": "^1.106.1",
+    "@typescript-eslint/eslint-plugin": "^8.24.0",
+    "@typescript-eslint/parser": "^8.24.0",
+    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-electron": "^2.4.1",
+    "eslint": "^9.17.0",
+    "typescript": "^5.7.2"
+  },
+  "dependencies": {}
+}
