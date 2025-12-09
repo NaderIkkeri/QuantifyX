@@ -106,8 +106,7 @@ export class DatasetFileSystemProvider implements vscode.FileSystemProvider {
    * Expected format: quantifyx://<tokenId>/<filename>
    */
   private extractTokenId(uri: vscode.Uri): string | null {
-    const pathParts = uri.path.split('/').filter(p => p.length > 0);
-    return pathParts.length > 0 ? pathParts[0] : null;
+    return uri.authority || null;
   }
 
   /**

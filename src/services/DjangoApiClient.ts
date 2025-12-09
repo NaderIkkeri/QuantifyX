@@ -75,6 +75,64 @@ export class DjangoApiClient {
 
 
   /**
+   * Verify access by IPFS CID (for local file opens)
+   * This is used when user browses a local encrypted file
+   */
+  async verifyAccessByCid(
+    cid: string,
+    walletAddress: string
+  ): Promise<DjangoVerifyResponse> {
+    try {
+      this.log(`Verifying access by CID ${cid}, wallet ${walletAddress}`);
+
+      // Find the dataset by CID and verify access
+      // We'll need to fetch all user datasets and find the matching CID
+      const response = await fetch(
+        `${this.baseUrl}/api/datasets/user-datasets/${walletAddress}/`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      // Find dataset with matching CID
+      const allDatasets = [
+        ...(data.owned || []),
+        ...(data.purchased || []),
+        ...(data.rented || [])
+      ];
+
+      const matchingDataset = allDatasets.find((ds: any) => ds.ipfs_cid === cid);
+
+      if (!matchingDataset) {
+        return {
+          success: false,
+          is_valid: false,
+          error: 'No access to this dataset',
+        };
+      }
+
+      // Now verify and get decryption key using token ID
+      return await this.verifyRentalStatus(matchingDataset.token_id.toString(), walletAddress);
+    } catch (error) {
+      this.logError('Access verification by CID failed', error);
+      return {
+        success: false,
+        is_valid: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
+  /**
    * Download encrypted file from IPFS via Django backend
    * The backend fetches from Pinata IPFS gateway and returns the encrypted bytes
    */

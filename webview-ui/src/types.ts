@@ -8,7 +8,7 @@ export interface MessageToWebview {
 }
 
 export interface MessageFromWebview {
-  type: 'connectWallet' | 'disconnectWallet' | 'unlockDataset' | 'lockDataset' | 'getMemoryStats' | 'openDataset';
+  type: 'walletConnected' | 'disconnectWallet' | 'unlockDataset' | 'lockDataset' | 'getMemoryStats' | 'openDataset' | 'error';
   payload?: any;
 }
 

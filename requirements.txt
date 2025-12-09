@@ -1,0 +1,8 @@
+# Node.js Project - See package.json for exact versions and installation
+# Install with: npm install
+
+vscode
+typescript
+eslint
+@types/node
+@types/vscode

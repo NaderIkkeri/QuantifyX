@@ -42,14 +42,14 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     if (!this.controller) {
       this.sendMessage({
         type: 'error',
-        payload: 'Controller not initialized',
+        payload: { message: 'Controller not initialized' },
       });
       return;
     }
 
     switch (message.type) {
-      case 'connectWallet':
-        await this.handleConnectWallet();
+      case 'walletConnected':
+        await this.handleWalletConnected(message.payload);
         break;
 
       case 'disconnectWallet':
@@ -71,44 +71,31 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       case 'getMemoryStats':
         await this.handleGetMemoryStats();
         break;
+
+      case 'error':
+        this.handleError(message.payload);
+        break;
     }
   }
 
-  private async handleConnectWallet() {
-    // Prompt user to enter their wallet address
-    const walletAddress = await vscode.window.showInputBox({
-      prompt: 'Enter your Ethereum wallet address',
-      placeHolder: '0x...',
-      validateInput: (value) => {
-        if (!value.startsWith('0x') || value.length !== 42) {
-          return 'Invalid Ethereum address';
-        }
-        return null;
-      },
-    });
-
-    if (!walletAddress) {
+  private async handleWalletConnected(payload: { address: string }) {
+    if (!payload.address) {
+      this.handleError({ message: "Connection message received without an address."});
       return;
     }
 
     const session: UserSession = {
-      walletAddress: walletAddress,
+      walletAddress: payload.address,
       connectedAt: Date.now(),
       isConnected: true,
     };
 
     this.controller!.setUserSession(session);
 
-    this.sendMessage({
-      type: 'walletConnected',
-      payload: {
-        address: walletAddress,
-        connectedAt: session.connectedAt,
-        isConnected: true,
-      },
-    });
-
-    vscode.window.showInformationMessage(`Wallet connected: ${walletAddress}`);
+    // We don't need to send a message back to the webview,
+    // as it already has the wallet info.
+    // We can, however, show a confirmation in VS Code.
+    vscode.window.showInformationMessage(`Wallet connected: ${payload.address}`);
   }
 
   private async handleDisconnectWallet() {
@@ -158,6 +145,12 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       type: 'memoryStats',
       payload: stats,
     });
+  }
+
+  private handleError(payload: { message: string }) {
+    if (payload.message) {
+      vscode.window.showErrorMessage(`Webview Error: ${payload.message}`);
+    }
   }
 
   private sendMessage(message: { type: string; payload?: any }) {

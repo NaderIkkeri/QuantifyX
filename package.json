@@ -1,9 +1,10 @@
 {
   "name": "quantifyx",
   "displayName": "QuantifyX",
-  "description": "Secure Data Analysis & Decryption Platform with DRM Protection",
-  "version": "0.0.1",
+  "description": "Secure decentralized dataset marketplace extension",
+  "version": "1.0.0",
   "publisher": "quantifyx",
+  "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.106.1"
   },
@@ -29,7 +30,7 @@
         {
           "id": "quantifyx-sidebar-view",
           "title": "QuantifyX",
-          "icon": "media/icon.svg"
+          "icon": "media/icon.png"
         }
       ]
     },
@@ -53,6 +54,12 @@
         "title": "Unlock Dataset",
         "category": "QuantifyX",
         "icon": "$(unlock)"
+      },
+      {
+        "command": "quantifyx.openLocalFile",
+        "title": "Open Local Encrypted File",
+        "category": "QuantifyX",
+        "icon": "$(file-binary)"
       },
       {
         "command": "quantifyx.openDataset",
@@ -92,6 +99,9 @@
         },
         {
           "command": "quantifyx.unlockDataset"
+        },
+        {
+          "command": "quantifyx.openLocalFile"
         },
         {
           "command": "quantifyx.openDataset"
