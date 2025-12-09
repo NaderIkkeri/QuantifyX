@@ -26,7 +26,23 @@ export class DecryptionService {
       this.log(`Decryption key length: ${decryptionKey.length} chars`);
 
       // Decode the Fernet token
-      const tokenBuffer = Buffer.from(encryptedData);
+      let tokenBuffer: Buffer = Buffer.from(encryptedData) as Buffer;
+
+      // Check if it's base64 encoded (Fernet tokens start with 0x80 when decoded)
+      // If the first byte is NOT 0x80, it might be base64 encoded (which is standard output from Fernet.encrypt)
+      if (tokenBuffer.length > 0 && tokenBuffer[0] !== 0x80) {
+        try {
+          const asString = tokenBuffer.toString('utf-8');
+          // Try to decode
+          const decoded = this.base64UrlDecode(asString);
+          if (decoded.length > 0 && decoded[0] === 0x80) {
+            tokenBuffer = decoded;
+            this.log('Detected Base64 encoding, decoded successfully.');
+          }
+        } catch (e) {
+          // Ignore, proceed with original buffer (will likely fail later if it was indeed invalid)
+        }
+      }
 
       // Fernet token format: Version (1 byte) | Timestamp (8 bytes) | IV (16 bytes) | Ciphertext (variable) | HMAC (32 bytes)
       if (tokenBuffer.length < 57) {
@@ -77,7 +93,7 @@ export class DecryptionService {
       return new Uint8Array(decrypted);
     } catch (error) {
       this.logError('Decryption failed', error);
-      return null;
+      throw error;
     }
   }
 
@@ -117,7 +133,7 @@ export class DecryptionService {
       return new Uint8Array(decrypted);
     } catch (error) {
       this.logError('Simple decryption failed', error);
-      return null;
+      throw error;
     }
   }
 
@@ -128,15 +144,18 @@ export class DecryptionService {
     encryptedData: Uint8Array,
     decryptionKey: string
   ): Promise<Uint8Array | null> {
-    // Try Fernet-compatible decryption first
-    let result = await this.decryptDataset(encryptedData, decryptionKey);
-
-    if (!result) {
+    try {
+      // Try Fernet-compatible decryption first
+      return await this.decryptDataset(encryptedData, decryptionKey);
+    } catch (fernetError) {
       this.log('Fernet decryption failed, trying simple AES decryption');
-      result = await this.decryptSimple(encryptedData, decryptionKey);
+      try {
+        return await this.decryptSimple(encryptedData, decryptionKey);
+      } catch (simpleError) {
+        // Throw the original Fernet error as it's the primary method
+        throw fernetError;
+      }
     }
-
-    return result;
   }
 
   /**

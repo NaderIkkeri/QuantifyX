@@ -1,40 +1,80 @@
 import { useState, useEffect } from 'react';
 import './App.css';
-import type { MessageFromWebview, MessageToWebview, WalletInfo, DatasetInfo, MemoryStats } from './types';
+import { VSCodeButton, VSCodeDivider, VSCodeTextField } from '@vscode/webview-ui-toolkit/react';
 
-// VS Code API
-declare const acquireVsCodeApi: any;
+// --- Type Definitions ---
+
+interface WalletInfo {
+  isConnected: boolean;
+  address: string;
+  connectedAt: number;
+}
+
+interface DatasetInfo {
+  tokenId: string;
+  filename: string;
+  expiresIn: number;
+}
+
+interface UserDataset {
+  token_id: number;
+  name: string;
+  description: string;
+  category: string;
+  format: string;
+  ipfs_cid: string;
+  price: string;
+  owner: string;
+}
+
+interface MemoryStats {
+  datasetCount: number;
+  totalSizeMB: number;
+  datasets: DatasetInfo[];
+}
+
+// Interface for messages sent TO the extension
+interface ExtensionMessage {
+  type: string;
+  payload?: unknown;
+}
+
+// Interface for the VS Code API
+interface VsCodeApi {
+  postMessage(message: unknown): void;
+  getState(): unknown;
+  setState(state: unknown): void;
+}
+
+// Declare the API function properly instead of using 'any'
+declare function acquireVsCodeApi(): VsCodeApi;
 const vscode = acquireVsCodeApi();
 
 function App() {
   const [walletInfo, setWalletInfo] = useState<WalletInfo | null>(null);
-  const [datasets, setDatasets] = useState<DatasetInfo[]>([]);
+  const [datasets, setDatasets] = useState<DatasetInfo[]>([]); // Active memory datasets
   const [memoryStats, setMemoryStats] = useState<MemoryStats | null>(null);
-  const [tokenIdInput, setTokenIdInput] = useState('');
-  const [cidInput, setCidInput] = useState('');
+  
+  // User's Owned/Rented/Purchased Datasets
+  const [userDatasets, setUserDatasets] = useState<{ owned: UserDataset[], purchased: UserDataset[], rented: UserDataset[] } | null>(null);
+  const [loadingDatasets, setLoadingDatasets] = useState(false);
+  
+  const [walletInput, setWalletInput] = useState('');
 
-  // Listen for messages from extension
+  // --- 1. Message Handling (Listener) ---
   useEffect(() => {
-    const handleMessage = (event: MessageEvent<MessageToWebview>) => {
+    const handleMessage = (event: MessageEvent) => {
       const message = event.data;
 
       switch (message.type) {
         case 'walletConnected':
           setWalletInfo(message.payload);
+          fetchUserDatasets(message.payload.address); // Auto-fetch on connect
           break;
 
         case 'walletDisconnected':
           setWalletInfo(null);
-          break;
-
-        case 'datasetUnlocked':
-          // Refresh dataset list
-          requestMemoryStats();
-          break;
-
-        case 'datasetLocked':
-          // Refresh dataset list
-          requestMemoryStats();
+          setUserDatasets(null);
           break;
 
         case 'memoryStats':
@@ -42,8 +82,9 @@ function App() {
           updateDatasetList(message.payload);
           break;
 
-        case 'error':
-          console.error('Error from extension:', message.payload);
+        case 'datasetUnlocked':
+        case 'datasetLocked':
+          requestMemoryStats(); // Refresh memory stats on changes
           break;
       }
     };
@@ -52,198 +93,204 @@ function App() {
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
-  // Request initial memory stats
+  // --- 2. Auto-Refresh Memory Stats ---
   useEffect(() => {
     requestMemoryStats();
-    const interval = setInterval(requestMemoryStats, 5000); // Refresh every 5 seconds
+    const interval = setInterval(requestMemoryStats, 5000); // Refresh every 5s
     return () => clearInterval(interval);
   }, []);
 
-  const updateDatasetList = (stats: MemoryStats) => {
-    const datasetList: DatasetInfo[] = stats.datasets.map(ds => ({
-      tokenId: ds.tokenId,
-      filename: ds.filename,
-      expiresIn: ds.expiresIn,
-      expiresAt: new Date(Date.now() + ds.expiresIn).toLocaleString(),
-    }));
-    setDatasets(datasetList);
-  };
+  // --- 3. Helper Functions ---
 
-  const sendMessage = (message: MessageFromWebview) => {
-    vscode.postMessage(message);
+  // Replaced 'any' with the ExtensionMessage interface
+  const sendMessage = (msg: ExtensionMessage) => {
+    vscode.postMessage(msg);
   };
 
   const requestMemoryStats = () => {
     sendMessage({ type: 'getMemoryStats' });
   };
 
-  const handleConnectWallet = () => {
-    sendMessage({ type: 'connectWallet' });
+  const updateDatasetList = (stats: MemoryStats) => {
+    setDatasets(stats.datasets || []);
+  };
+
+  // --- 4. Wallet Actions ---
+
+  const handleConnectWallet = async () => {
+    const trimmed = walletInput.trim();
+    if (!trimmed.startsWith('0x') || trimmed.length !== 42) {
+      alert('Invalid address');
+      return;
+    }
+
+    const info: WalletInfo = {
+      isConnected: true,
+      address: trimmed,
+      connectedAt: Date.now()
+    };
+
+    setWalletInfo(info);
+    sendMessage({ type: 'walletConnected', payload: info });
+    setWalletInput('');
+    
+    // Fetch immediately
+    await fetchUserDatasets(trimmed);
   };
 
   const handleDisconnectWallet = () => {
     sendMessage({ type: 'disconnectWallet' });
+    setWalletInfo(null);
+    setUserDatasets(null);
   };
 
-  const handleUnlockDataset = () => {
-    if (!tokenIdInput.trim() || !cidInput.trim()) {
-      alert('Please enter both Token ID and CID');
-      return;
-    }
+  // --- 5. Dataset Actions ---
 
+  const handleUnlock = (tokenId: number, cid: string) => {
     sendMessage({
       type: 'unlockDataset',
-      payload: {
-        tokenId: tokenIdInput.trim(),
-        cid: cidInput.trim(),
-      },
-    });
-
-    // Clear inputs
-    setTokenIdInput('');
-    setCidInput('');
-  };
-
-  const handleLockDataset = (tokenId: string) => {
-    sendMessage({
-      type: 'lockDataset',
-      payload: { tokenId },
+      payload: { tokenId: tokenId.toString(), cid }
     });
   };
 
-  const handleOpenDataset = (tokenId: string) => {
-    sendMessage({
-      type: 'openDataset',
-      payload: { tokenId },
-    });
+  const handleOpenActive = (tokenId: string) => {
+    sendMessage({ type: 'openDataset', payload: { tokenId } });
   };
 
-  const formatExpiresIn = (milliseconds: number): string => {
-    const seconds = Math.floor(milliseconds / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-
-    if (days > 0) return `${days}d ${hours % 24}h`;
-    if (hours > 0) return `${hours}h ${minutes % 60}m`;
-    if (minutes > 0) return `${minutes}m`;
-    return `${seconds}s`;
+  const handleLockActive = (tokenId: string) => {
+    sendMessage({ type: 'lockDataset', payload: { tokenId } });
   };
+
+  // --- 6. API Fetch Logic ---
+  const fetchUserDatasets = async (address: string) => {
+    setLoadingDatasets(true);
+    try {
+      // NOTE: Ensure your backend is running at localhost:8000
+      const response = await fetch(`http://127.0.0.1:8000/api/datasets/user-datasets/${address}/`);
+      
+      if (!response.ok) throw new Error(`API Error: ${response.status}`);
+      
+      const data = await response.json();
+      console.log('API Data:', data);
+
+      if (data.success) {
+        setUserDatasets({
+          owned: data.owned || [],
+          purchased: data.purchased || [],
+          rented: data.rented || []
+        });
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingDatasets(false);
+    }
+  };
+
+  // --- 7. Render ---
+
+  const totalCount = userDatasets 
+    ? (userDatasets.owned.length + userDatasets.purchased.length + userDatasets.rented.length) 
+    : 0;
 
   return (
     <div className="container">
-      <header className="header">
+      <div className="header">
         <h1>QuantifyX</h1>
-        <p className="subtitle">Secure Data Analysis Platform</p>
-      </header>
+        <p>Secure Data Node</p>
+      </div>
+      
+      <VSCodeDivider />
 
-      {/* Wallet Connection Section */}
-      <section className="section">
-        <h2>Wallet Connection</h2>
-        {!walletInfo?.isConnected ? (
-          <button className="btn btn-primary" onClick={handleConnectWallet}>
-            Connect Wallet
-          </button>
-        ) : (
-          <div className="wallet-info">
-            <div className="info-row">
-              <span className="label">Address:</span>
-              <span className="value monospace">{walletInfo.address}</span>
-            </div>
-            <button className="btn btn-secondary" onClick={handleDisconnectWallet}>
-              Disconnect
-            </button>
+      {/* Login State */}
+      {!walletInfo ? (
+        <div className="login-section">
+          <p>Connect Wallet to Access Data</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px' }}>
+            {/* FIXED: Removed 'any'. 
+                We let type inference handle 'e', and then cast 'e.target' 
+                to HTMLInputElement to safely access '.value'.
+            */}
+            <VSCodeTextField 
+              placeholder="0x..." 
+              value={walletInput} 
+              onInput={(e) => {
+                const target = e.target as HTMLInputElement;
+                setWalletInput(target.value);
+              }}
+            >
+              Wallet Address
+            </VSCodeTextField>
+            <VSCodeButton onClick={handleConnectWallet}>Connect Wallet</VSCodeButton>
           </div>
-        )}
-      </section>
+        </div>
+      ) : (
+        <div className="dashboard">
+          <div className="status-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+            <span style={{ fontSize: '0.8rem' }}>🟢 {walletInfo.address.slice(0, 6)}...{walletInfo.address.slice(-4)}</span>
+            <VSCodeButton appearance="secondary" onClick={handleDisconnectWallet}>Disconnect</VSCodeButton>
+          </div>
 
-      {/* Unlock Dataset Section */}
-      {walletInfo?.isConnected && (
-        <section className="section">
-          <h2>Unlock Dataset</h2>
-          <div className="form-group">
-            <label htmlFor="tokenId">Token ID</label>
-            <input
-              id="tokenId"
-              type="text"
-              className="input"
-              placeholder="Enter token ID (e.g., 1, 2, 3)"
-              value={tokenIdInput}
-              onChange={(e) => setTokenIdInput(e.target.value)}
-            />
-          </div>
-          <div className="form-group">
-            <label htmlFor="cid">IPFS CID</label>
-            <input
-              id="cid"
-              type="text"
-              className="input"
-              placeholder="Enter IPFS CID (e.g., Qm...)"
-              value={cidInput}
-              onChange={(e) => setCidInput(e.target.value)}
-            />
-          </div>
-          <button className="btn btn-primary" onClick={handleUnlockDataset}>
-            Unlock & Open Dataset
-          </button>
-        </section>
-      )}
-
-      {/* Active Datasets Section */}
-      <section className="section">
-        <h2>Active Datasets</h2>
-        {memoryStats && (
-          <div className="stats-box">
-            <div className="stat-item">
-              <span className="stat-label">Count:</span>
-              <span className="stat-value">{memoryStats.datasetCount}</span>
-            </div>
-            <div className="stat-item">
-              <span className="stat-label">Memory:</span>
-              <span className="stat-value">{memoryStats.totalSizeMB.toFixed(2)} MB</span>
-            </div>
-          </div>
-        )}
-
-        {datasets.length === 0 ? (
-          <p className="empty-state">No datasets unlocked yet</p>
-        ) : (
-          <div className="dataset-list">
-            {datasets.map((dataset) => (
-              <div key={dataset.tokenId} className="dataset-card">
-                <div className="dataset-header">
-                  <h3 className="dataset-title">{dataset.filename}</h3>
-                  <span className="dataset-token">#{dataset.tokenId}</span>
-                </div>
-                <div className="dataset-info">
-                  <div className="info-row">
-                    <span className="label">Expires in:</span>
-                    <span className="value">{formatExpiresIn(dataset.expiresIn)}</span>
+          {/* ACTIVE MEMORY SECTION */}
+          {memoryStats && memoryStats.datasetCount > 0 && (
+            <div className="memory-section">
+              <h3>⚡ Active Memory ({memoryStats.datasetCount})</h3>
+              {datasets.map(ds => (
+                <div key={ds.tokenId} className="memory-card">
+                  <div className="memory-info">
+                    <strong>#{ds.tokenId}</strong>
+                    <span>{ds.filename}</span>
                   </div>
-                  <div className="info-row">
-                    <span className="label">Expires at:</span>
-                    <span className="value">{dataset.expiresAt}</span>
+                  <div className="memory-actions">
+                    <VSCodeButton onClick={() => handleOpenActive(ds.tokenId)}>Open</VSCodeButton>
+                    <VSCodeButton appearance="secondary" onClick={() => handleLockActive(ds.tokenId)}>Lock</VSCodeButton>
                   </div>
                 </div>
-                <div className="dataset-actions">
-                  <button
-                    className="btn btn-small btn-primary"
-                    onClick={() => handleOpenDataset(dataset.tokenId)}
-                  >
-                    Open
-                  </button>
-                  <button
-                    className="btn btn-small btn-danger"
-                    onClick={() => handleLockDataset(dataset.tokenId)}
-                  >
-                    Lock
-                  </button>
-                </div>
+              ))}
+              <VSCodeDivider />
+            </div>
+          )}
+
+          {/* CLOUD DATASETS SECTION */}
+          <div className="cloud-section">
+            <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3>☁️ Your Datasets ({totalCount})</h3>
+              <VSCodeButton appearance="icon" aria-label="Refresh" onClick={() => fetchUserDatasets(walletInfo.address)}>
+                <span className="codicon codicon-refresh">↻</span>
+              </VSCodeButton>
+            </div>
+
+            {loadingDatasets ? <p>Loading...</p> : (
+              <div className="dataset-list">
+                {/* OWNED */}
+                {userDatasets?.owned.map(ds => (
+                  <div key={ds.token_id} className="dataset-card owned">
+                    <span className="badge">OWNED</span>
+                    <h4>{ds.name}</h4>
+                    <p>#{ds.token_id} • {ds.format}</p>
+                    <VSCodeButton onClick={() => handleUnlock(ds.token_id, ds.ipfs_cid)}>
+                      Decrypt & Load
+                    </VSCodeButton>
+                  </div>
+                ))}
+
+                {/* RENTED */}
+                {userDatasets?.rented.map(ds => (
+                  <div key={ds.token_id} className="dataset-card rented">
+                    <span className="badge">RENTED</span>
+                    <h4>{ds.name}</h4>
+                    <VSCodeButton onClick={() => handleUnlock(ds.token_id, ds.ipfs_cid)}>
+                      Decrypt & Load
+                    </VSCodeButton>
+                  </div>
+                ))}
+                
+                {totalCount === 0 && <p style={{ opacity: 0.7, marginTop: '20px' }}>No datasets found.</p>}
               </div>
-            ))}
+            )}
           </div>
-        )}
-      </section>
+        </div>
+      )}
     </div>
   );
 }

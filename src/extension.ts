@@ -94,6 +94,13 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
+  // Command: Open Local Encrypted File
+  context.subscriptions.push(
+    vscode.commands.registerCommand('quantifyx.openLocalFile', async () => {
+      await controller.openLocalFile();
+    })
+  );
+
   // Command: Open Dataset
   context.subscriptions.push(
     vscode.commands.registerCommand('quantifyx.openDataset', async () => {
