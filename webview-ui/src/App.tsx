@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import './App.css';
-import { VSCodeButton, VSCodeDivider, VSCodeTextField } from '@vscode/webview-ui-toolkit/react';
+import { VSCodeButton, VSCodeDivider } from '@vscode/webview-ui-toolkit/react';
 
 // --- Type Definitions ---
 
@@ -58,8 +58,6 @@ function App() {
   // User's Owned/Rented/Purchased Datasets
   const [userDatasets, setUserDatasets] = useState<{ owned: UserDataset[], purchased: UserDataset[], rented: UserDataset[] } | null>(null);
   const [loadingDatasets, setLoadingDatasets] = useState(false);
-  
-  const [walletInput, setWalletInput] = useState('');
 
   // --- 1. Message Handling (Listener) ---
   useEffect(() => {
@@ -75,6 +73,10 @@ function App() {
         case 'walletDisconnected':
           setWalletInfo(null);
           setUserDatasets(null);
+          break;
+
+        case 'connectionError':
+          alert(`Connection failed: ${message.payload.message}`);
           break;
 
         case 'memoryStats':
@@ -117,25 +119,8 @@ function App() {
 
   // --- 4. Wallet Actions ---
 
-  const handleConnectWallet = async () => {
-    const trimmed = walletInput.trim();
-    if (!trimmed.startsWith('0x') || trimmed.length !== 42) {
-      alert('Invalid address');
-      return;
-    }
-
-    const info: WalletInfo = {
-      isConnected: true,
-      address: trimmed,
-      connectedAt: Date.now()
-    };
-
-    setWalletInfo(info);
-    sendMessage({ type: 'walletConnected', payload: info });
-    setWalletInput('');
-    
-    // Fetch immediately
-    await fetchUserDatasets(trimmed);
+  const handleConnectWallet = () => {
+    sendMessage({ type: 'requestWalletConnection' });
   };
 
   const handleDisconnectWallet = () => {
@@ -205,23 +190,14 @@ function App() {
       {/* Login State */}
       {!walletInfo ? (
         <div className="login-section">
-          <p>Connect Wallet to Access Data</p>
+          <p>Connect your MetaMask wallet to access datasets</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px' }}>
-            {/* FIXED: Removed 'any'. 
-                We let type inference handle 'e', and then cast 'e.target' 
-                to HTMLInputElement to safely access '.value'.
-            */}
-            <VSCodeTextField 
-              placeholder="0x..." 
-              value={walletInput} 
-              onInput={(e) => {
-                const target = e.target as HTMLInputElement;
-                setWalletInput(target.value);
-              }}
-            >
-              Wallet Address
-            </VSCodeTextField>
-            <VSCodeButton onClick={handleConnectWallet}>Connect Wallet</VSCodeButton>
+            <VSCodeButton onClick={handleConnectWallet}>
+              Connect with MetaMask
+            </VSCodeButton>
+            <p style={{ fontSize: '0.8rem', opacity: 0.7, marginTop: '10px', textAlign: 'center' }}>
+              This will open your browser to connect MetaMask
+            </p>
           </div>
         </div>
       ) : (

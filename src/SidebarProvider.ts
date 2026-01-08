@@ -36,6 +36,22 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     webviewView.webview.onDidReceiveMessage(async (message: MessageFromWebview) => {
       await this.handleMessage(message);
     });
+
+    // Send initial wallet state when webview loads
+    this.sendInitialState();
+  }
+
+  /**
+   * Send initial state to webview when it first loads
+   */
+  private sendInitialState(): void {
+    // Small delay to ensure webview is ready
+    setTimeout(() => {
+      const session = this.controller?.getUserSession();
+      if (session && session.isConnected) {
+        this.sendWalletConnected(session);
+      }
+    }, 100);
   }
 
   private async handleMessage(message: MessageFromWebview) {
@@ -48,6 +64,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     }
 
     switch (message.type) {
+      case 'requestWalletConnection':
+        await vscode.commands.executeCommand('quantifyx.connectWallet');
+        break;
+
       case 'walletConnected':
         await this.handleWalletConnected(message.payload);
         break;
@@ -79,37 +99,39 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   }
 
   private async handleWalletConnected(payload: { address: string }) {
-    if (!payload.address) {
-      this.handleError({ message: "Connection message received without an address."});
-      return;
-    }
-
-    const session: UserSession = {
-      walletAddress: payload.address,
-      connectedAt: Date.now(),
-      isConnected: true,
-    };
-
-    this.controller!.setUserSession(session);
-
-    // We don't need to send a message back to the webview,
-    // as it already has the wallet info.
-    // We can, however, show a confirmation in VS Code.
-    vscode.window.showInformationMessage(`Wallet connected: ${payload.address}`);
+    // This now only handles messages FROM webview (deprecated flow)
+    // Real connection happens via extension command
+    vscode.window.showWarningMessage(
+      'Please use the "Connect Wallet" command from the Command Palette for secure MetaMask authentication'
+    );
   }
 
   private async handleDisconnectWallet() {
-    this.controller!.setUserSession({
-      walletAddress: '',
-      connectedAt: 0,
-      isConnected: false,
-    });
+    // Trigger the disconnect command
+    await vscode.commands.executeCommand('quantifyx.disconnectWallet');
+  }
 
+  /**
+   * Notify webview of successful wallet connection
+   */
+  public sendWalletConnected(session: UserSession): void {
     this.sendMessage({
-      type: 'walletDisconnected',
+      type: 'walletConnected',
+      payload: {
+        address: session.walletAddress,
+        connectedAt: session.connectedAt,
+        isConnected: true
+      }
     });
+  }
 
-    vscode.window.showInformationMessage('Wallet disconnected');
+  /**
+   * Notify webview of wallet disconnection
+   */
+  public sendWalletDisconnected(): void {
+    this.sendMessage({
+      type: 'walletDisconnected'
+    });
   }
 
   private async handleUnlockDataset(payload: { tokenId: string; cid: string }) {

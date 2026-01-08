@@ -52,3 +52,23 @@ export interface UserSession {
   connectedAt: number;
   isConnected: boolean;
 }
+
+export interface WalletAuthResult {
+  success: boolean;
+  walletAddress?: string;
+  signature?: string;
+  error?: string;
+}
+
+export interface PersistedWalletSession {
+  walletAddress: string;
+  connectedAt: number;
+  lastVerified: number;
+  signature?: string;
+}
+
+export interface AuthenticationChallenge {
+  nonce: string;
+  timestamp: number;
+  expiresAt: number;
+}

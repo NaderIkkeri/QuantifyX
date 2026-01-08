@@ -1,15 +1,23 @@
 {
   "compilerOptions": {
-    // ... your existing options ...
+    "module": "commonjs",
+    "target": "ES2020",
+    "lib": ["ES2020"],
+    "sourceMap": true,
     "rootDir": "src",
-    "outDir": "out"
+    "outDir": "out",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true
   },
   "include": [
-    "src/**/*" 
+    "src/**/*"
   ],
   "exclude": [
     "node_modules",
     ".vscode-test",
-    "webview-ui"  // 👈 Add this line!
+    "webview-ui"
   ]
 }
