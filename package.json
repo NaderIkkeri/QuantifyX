@@ -5,6 +5,10 @@
   "version": "1.0.0",
   "publisher": "quantifyx",
   "icon": "media/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/NaderIkkeri/QuantifyX.git"
+  },
   "engines": {
     "vscode": "^1.106.1"
   },
