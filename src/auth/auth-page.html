@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QuantifyX - Connect Wallet</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .container {
+      background: white;
+      border-radius: 20px;
+      padding: 40px;
+      max-width: 500px;
+      width: 100%;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      animation: slideIn 0.3s ease-out;
+    }
+
+    @keyframes slideIn {
+      from {
+        transform: translateY(-30px);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    .logo {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .logo h1 {
+      color: #667eea;
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    .logo p {
+      color: #666;
+      font-size: 14px;
+    }
+
+    .content {
+      text-align: center;
+    }
+
+    .description {
+      color: #333;
+      font-size: 16px;
+      line-height: 1.6;
+      margin-bottom: 30px;
+    }
+
+    .status {
+      padding: 15px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .status.waiting {
+      background: #fff3cd;
+      color: #856404;
+      border: 1px solid #ffeaa7;
+    }
+
+    .status.success {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+
+    .status.error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+
+    .connect-btn {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 16px 32px;
+      font-size: 16px;
+      font-weight: 600;
+      border-radius: 10px;
+      cursor: pointer;
+      width: 100%;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    .connect-btn:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+    }
+
+    .connect-btn:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    .connect-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 3px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top-color: white;
+      animation: spin 0.8s linear infinite;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .error-message {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+      padding: 15px;
+      border-radius: 10px;
+      margin-top: 20px;
+      font-size: 14px;
+      line-height: 1.5;
+      display: none;
+    }
+
+    .error-message.show {
+      display: block;
+    }
+
+    .error-message a {
+      color: #764ba2;
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    .error-message a:hover {
+      text-decoration: underline;
+    }
+
+    .info {
+      margin-top: 20px;
+      padding: 15px;
+      background: #e7f3ff;
+      border-radius: 10px;
+      font-size: 13px;
+      color: #004085;
+      line-height: 1.5;
+    }
+
+    .metamask-icon {
+      font-size: 48px;
+      margin-bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">
+      <div class="metamask-icon">🦊</div>
+      <h1>QuantifyX</h1>
+      <p>Wallet Connection</p>
+    </div>
+
+    <div class="content">
+      <p class="description">
+        Sign a message with MetaMask to prove you own this wallet address.
+        This signature is only used for authentication and cannot access your funds.
+      </p>
+
+      <div id="status" class="status waiting">
+        Waiting for MetaMask...
+      </div>
+
+      <button id="connect-btn" class="connect-btn">
+        Connect MetaMask
+      </button>
+
+      <div id="error" class="error-message"></div>
+
+      <div class="info">
+        <strong>What is MetaMask?</strong><br>
+        MetaMask is a browser extension wallet for Ethereum. You'll need it installed to continue.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const nonce = urlParams.get('nonce');
+    const callbackPort = urlParams.get('port');
+
+    const statusEl = document.getElementById('status');
+    const connectBtn = document.getElementById('connect-btn');
+    const errorEl = document.getElementById('error');
+
+    if (!nonce || !callbackPort) {
+      showError('Invalid authentication request. Please try again from VS Code.');
+      connectBtn.disabled = true;
+    }
+
+    function showStatus(message, type = 'waiting') {
+      statusEl.textContent = message;
+      statusEl.className = `status ${type}`;
+    }
+
+    function showError(message, link = null) {
+      errorEl.innerHTML = message;
+      if (link) {
+        errorEl.innerHTML += ` <a href="${link}" target="_blank">Learn more</a>`;
+      }
+      errorEl.classList.add('show');
+      statusEl.className = 'status error';
+      statusEl.textContent = 'Connection failed';
+    }
+
+    function hideError() {
+      errorEl.classList.remove('show');
+    }
+
+    async function connectWallet() {
+      hideError();
+      connectBtn.disabled = true;
+      connectBtn.innerHTML = '<span class="spinner"></span>Connecting...';
+
+      try {
+        if (typeof window.ethereum === 'undefined') {
+          throw new Error('MetaMask is not installed. Please install MetaMask to continue.|https://metamask.io/download');
+        }
+
+        showStatus('Requesting account access...', 'waiting');
+
+        const accounts = await window.ethereum.request({
+          method: 'eth_requestAccounts'
+        });
+
+        if (!accounts || accounts.length === 0) {
+          throw new Error('No accounts found in MetaMask. Please create or import a wallet first.');
+        }
+
+        const address = accounts[0];
+        showStatus(`Connected to ${address.slice(0, 6)}...${address.slice(-4)}. Requesting signature...`, 'waiting');
+
+        connectBtn.innerHTML = '<span class="spinner"></span>Awaiting signature...';
+
+        const message = `QuantifyX Wallet Verification\n\nNonce: ${nonce}\n\nSign this message to prove you own this wallet.\n\nThis signature cannot access your funds.`;
+
+        const signature = await window.ethereum.request({
+          method: 'personal_sign',
+          params: [message, address]
+        });
+
+        showStatus('Verifying signature...', 'waiting');
+        connectBtn.innerHTML = '<span class="spinner"></span>Verifying...';
+
+        const response = await fetch(`http://localhost:${callbackPort}/callback`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            address,
+            signature,
+            nonce
+          })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Signature verification failed. Please try again.');
+        }
+
+        const result = await response.json();
+
+        if (result.success) {
+          showStatus('Success! You can close this window.', 'success');
+          connectBtn.innerHTML = 'Success';
+          connectBtn.style.background = '#28a745';
+
+          setTimeout(() => {
+            window.close();
+          }, 2000);
+        } else {
+          throw new Error(result.error || 'Verification failed');
+        }
+
+      } catch (error) {
+        console.error('Connection error:', error);
+
+        let errorMessage = error.message || 'An unknown error occurred';
+        let errorLink = null;
+
+        if (errorMessage.includes('|')) {
+          [errorMessage, errorLink] = errorMessage.split('|');
+        }
+
+        if (error.code === 4001) {
+          errorMessage = 'You rejected the signature request. Please try again if you want to connect.';
+        } else if (error.code === -32002) {
+          errorMessage = 'A MetaMask request is already pending. Please check your MetaMask extension.';
+        }
+
+        showError(errorMessage, errorLink);
+        connectBtn.disabled = false;
+        connectBtn.innerHTML = 'Try Again';
+        connectBtn.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+      }
+    }
+
+    connectBtn.addEventListener('click', connectWallet);
+
+    if (window.ethereum) {
+      showStatus('MetaMask detected. Click the button to connect.', 'waiting');
+    } else {
+      showStatus('MetaMask not detected', 'error');
+      showError('MetaMask browser extension is not installed.', 'https://metamask.io/download');
+    }
+  </script>
+</body>
+</html>

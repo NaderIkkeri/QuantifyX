@@ -94,6 +94,12 @@
         "title": "Configure Django Backend URL",
         "category": "QuantifyX",
         "icon": "$(settings-gear)"
+      },
+      {
+        "command": "quantifyx.disconnectWallet",
+        "title": "Disconnect Wallet",
+        "category": "QuantifyX",
+        "icon": "$(debug-disconnect)"
       }
     ],
     "menus": {
@@ -121,6 +127,9 @@
         },
         {
           "command": "quantifyx.configureDjangoUrl"
+        },
+        {
+          "command": "quantifyx.disconnectWallet"
         }
       ]
     },
@@ -134,8 +143,13 @@
         },
         "quantifyx.autoConnectWallet": {
           "type": "boolean",
-          "default": false,
-          "description": "Automatically connect wallet on extension activation"
+          "default": true,
+          "description": "Automatically reconnect wallet on extension activation"
+        },
+        "quantifyx.walletSessionTimeout": {
+          "type": "number",
+          "default": 30,
+          "description": "Days until wallet session expires (default: 30)"
         },
         "quantifyx.memoryLimitMB": {
           "type": "number",
@@ -156,6 +170,7 @@
     "dev:webview": "cd webview-ui && npm run dev"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
     "@types/vscode": "^1.106.1",
@@ -166,5 +181,9 @@
     "eslint": "^9.17.0",
     "typescript": "^5.7.2"
   },
-  "dependencies": {}
+  "dependencies": {
+    "ethers": "^6.16.0",
+    "express": "^5.2.1",
+    "open": "^11.0.0"
+  }
 }

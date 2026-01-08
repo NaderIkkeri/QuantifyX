@@ -44,7 +44,7 @@ export class DjangoApiClient {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      const data = await response.json();
+      const data = await response.json() as any;
       this.log(`Verification response: ${JSON.stringify(data)}`);
 
       // If successful, we have access and a decryption key
@@ -101,7 +101,7 @@ export class DjangoApiClient {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      const data = await response.json();
+      const data = await response.json() as any;
 
       // Find dataset with matching CID
       const allDatasets = [

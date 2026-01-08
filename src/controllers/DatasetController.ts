@@ -8,32 +8,85 @@ import { DjangoApiClient } from '../services/DjangoApiClient';
 import { DecryptionService } from '../services/DecryptionService';
 import { InMemoryDatasetManager } from '../services/InMemoryDatasetManager';
 import { DatasetFileSystemProvider } from '../providers/DatasetFileSystemProvider';
-import type { DecryptedDataset, UserSession } from '../types';
+import { StorageService } from '../services/StorageService';
+import type { DecryptedDataset, UserSession, PersistedWalletSession } from '../types';
 
 export class DatasetController {
   private apiClient: DjangoApiClient;
   private decryptionService: DecryptionService;
   private datasetManager: InMemoryDatasetManager;
   private fsProvider: DatasetFileSystemProvider;
+  private storageService: StorageService;
   private currentSession: UserSession | null = null;
 
   constructor(
     apiClient: DjangoApiClient,
     decryptionService: DecryptionService,
     datasetManager: InMemoryDatasetManager,
-    fsProvider: DatasetFileSystemProvider
+    fsProvider: DatasetFileSystemProvider,
+    storageService: StorageService
   ) {
     this.apiClient = apiClient;
     this.decryptionService = decryptionService;
     this.datasetManager = datasetManager;
     this.fsProvider = fsProvider;
+    this.storageService = storageService;
   }
 
   /**
    * Set current user session (wallet connection)
    */
-  setUserSession(session: UserSession): void {
+  async setUserSession(session: UserSession): Promise<void> {
     this.currentSession = session;
+
+    if (session.isConnected) {
+      await this.persistSession(session);
+    } else {
+      await this.clearPersistedSession();
+    }
+  }
+
+  /**
+   * Persist wallet session to storage
+   */
+  async persistSession(session: UserSession): Promise<void> {
+    const persistedSession: PersistedWalletSession = {
+      walletAddress: session.walletAddress,
+      connectedAt: session.connectedAt,
+      lastVerified: Date.now()
+    };
+
+    await this.storageService.saveWalletSession(persistedSession);
+  }
+
+  /**
+   * Load persisted wallet session from storage
+   */
+  async loadPersistedSession(): Promise<UserSession | null> {
+    const isValid = await this.storageService.isSessionValid();
+
+    if (!isValid) {
+      return null;
+    }
+
+    const persistedSession = await this.storageService.loadWalletSession();
+
+    if (!persistedSession) {
+      return null;
+    }
+
+    return {
+      walletAddress: persistedSession.walletAddress,
+      connectedAt: persistedSession.connectedAt,
+      isConnected: true
+    };
+  }
+
+  /**
+   * Clear persisted wallet session from storage
+   */
+  async clearPersistedSession(): Promise<void> {
+    await this.storageService.clearWalletSession();
   }
 
   /**
@@ -366,7 +419,7 @@ export class DatasetController {
         throw new Error(`Failed to fetch user datasets: ${response.statusText}`);
       }
 
-      const data = await response.json();
+      const data = await response.json() as { owned?: any[], purchased?: any[], rented?: any[] };
       return {
         owned: data.owned || [],
         purchased: data.purchased || [],

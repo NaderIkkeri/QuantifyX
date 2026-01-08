@@ -5,11 +5,16 @@ import { DecryptionService } from './services/DecryptionService';
 import { InMemoryDatasetManager } from './services/InMemoryDatasetManager';
 import { DatasetFileSystemProvider } from './providers/DatasetFileSystemProvider';
 import { DatasetController } from './controllers/DatasetController';
+import { StorageService } from './services/StorageService';
+import { WalletAuthService } from './services/WalletAuthService';
+import type { UserSession } from './types';
 
 export function activate(context: vscode.ExtensionContext) {
   console.log('QuantifyX extension is now active!');
 
   // Initialize services
+  const storageService = new StorageService(context);
+  const walletAuthService = new WalletAuthService();
   const apiClient = new DjangoApiClient();
   const decryptionService = new DecryptionService();
   const datasetManager = new InMemoryDatasetManager();
@@ -18,7 +23,8 @@ export function activate(context: vscode.ExtensionContext) {
     apiClient,
     decryptionService,
     datasetManager,
-    fsProvider
+    fsProvider,
+    storageService
   );
 
   // Register virtual file system for in-memory datasets
@@ -31,6 +37,11 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Create the sidebar provider
   const sidebarProvider = new SidebarProvider(context.extensionUri, controller);
+
+  // Auto-restore wallet session on activation (after sidebar provider is created)
+  restoreWalletSession(controller, sidebarProvider).catch(err => {
+    console.error('[Extension] Failed to restore wallet session:', err);
+  });
 
   // Register sidebar
   context.subscriptions.push(
@@ -201,31 +212,62 @@ ${stats.datasets.map(ds => `
     })
   );
 
-  // Command: Connect Wallet
+  // Command: Connect Wallet (MetaMask)
   context.subscriptions.push(
     vscode.commands.registerCommand('quantifyx.connectWallet', async () => {
-      const walletAddress = await vscode.window.showInputBox({
-        prompt: 'Enter your Ethereum wallet address',
-        placeHolder: '0x...',
-        validateInput: (value) => {
-          if (!value.startsWith('0x') || value.length !== 42) {
-            return 'Invalid Ethereum address';
+      try {
+        await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: 'Connecting to MetaMask...',
+            cancellable: true,
+          },
+          async (progress, token) => {
+            progress.report({ message: 'Opening browser for MetaMask authentication...' });
+
+            const result = await walletAuthService.authenticate(token);
+
+            if (result.success && result.walletAddress) {
+              const session: UserSession = {
+                walletAddress: result.walletAddress,
+                connectedAt: Date.now(),
+                isConnected: true,
+              };
+
+              await controller.setUserSession(session);
+
+              vscode.window.showInformationMessage(
+                `Wallet connected: ${result.walletAddress.slice(0, 6)}...${result.walletAddress.slice(-4)}`
+              );
+
+              // Notify webview
+              sidebarProvider.sendWalletConnected(session);
+            } else {
+              throw new Error(result.error || 'Connection cancelled');
+            }
           }
-          return null;
-        },
-      });
-
-      if (!walletAddress) {
-        return;
+        );
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        vscode.window.showErrorMessage(`Wallet connection failed: ${errorMsg}`);
       }
+    })
+  );
 
-      controller.setUserSession({
-        walletAddress,
-        connectedAt: Date.now(),
-        isConnected: true,
-      });
+  // Command: Disconnect Wallet
+  context.subscriptions.push(
+    vscode.commands.registerCommand('quantifyx.disconnectWallet', async () => {
+      const session: UserSession = {
+        walletAddress: '',
+        connectedAt: 0,
+        isConnected: false,
+      };
 
-      vscode.window.showInformationMessage(`Wallet connected: ${walletAddress}`);
+      await controller.setUserSession(session);
+      vscode.window.showInformationMessage('Wallet disconnected');
+
+      // Notify webview
+      sidebarProvider.sendWalletDisconnected();
     })
   );
 
@@ -262,6 +304,39 @@ ${stats.datasets.map(ds => `
 
 export function deactivate() {
   console.log('QuantifyX extension deactivated');
+}
+
+/**
+ * Auto-restore wallet session on extension activation
+ */
+async function restoreWalletSession(
+  controller: DatasetController,
+  sidebarProvider: SidebarProvider
+): Promise<void> {
+  const config = vscode.workspace.getConfiguration('quantifyx');
+  const autoConnect = config.get<boolean>('autoConnectWallet', true);
+
+  if (!autoConnect) {
+    console.log('[Extension] Auto-connect disabled, skipping wallet restore');
+    return;
+  }
+
+  try {
+    const session = await controller.loadPersistedSession();
+
+    if (session) {
+      await controller.setUserSession(session);
+
+      console.log('[Extension] Wallet session restored successfully:', session.walletAddress);
+
+      // Note: Webview will be notified when it loads via sendInitialState()
+      // No need to notify here as webview might not be ready yet
+    } else {
+      console.log('[Extension] No valid wallet session found');
+    }
+  } catch (error) {
+    console.error('[Extension] Failed to restore wallet session:', error);
+  }
 }
 
 /**
